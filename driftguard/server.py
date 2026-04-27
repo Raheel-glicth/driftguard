@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI
 
@@ -9,18 +11,15 @@ from driftguard.sdk import driftguard
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="DriftGuard", version="0.1.0")
-    app.include_router(create_dashboard_router(driftguard))
-    app.include_router(create_chat_router(driftguard))
-
-    @app.on_event("startup")
-    async def startup() -> None:
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
         await driftguard.start()
-
-    @app.on_event("shutdown")
-    async def shutdown() -> None:
+        yield
         await driftguard.stop()
 
+    app = FastAPI(title="DriftGuard", version="0.1.0", lifespan=lifespan)
+    app.include_router(create_dashboard_router(driftguard))
+    app.include_router(create_chat_router(driftguard))
     return app
 
 

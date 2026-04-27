@@ -16,56 +16,20 @@ from driftguard.storage.db import DriftGuardDatabase
 logger = structlog.get_logger(__name__)
 
 
-class SpawnWorker:
+class TraceProcessor:
     def __init__(
         self,
-        queue: BaseQueue,
         db: DriftGuardDatabase,
         injection_detector: InjectionDetector,
         drift_detector: DriftDetector,
         trust_detector: TrustScoreDetector,
     ) -> None:
-        self.queue = queue
         self.db = db
         self.injection_detector = injection_detector
         self.drift_detector = drift_detector
         self.trust_detector = trust_detector
-        self._task: asyncio.Task[None] | None = None
-        self._stop_event = asyncio.Event()
 
-    async def start(self) -> None:
-        if self._task and not self._task.done():
-            return
-        self._stop_event.clear()
-        self._task = asyncio.create_task(self._run_loop())
-
-    async def stop(self) -> None:
-        self._stop_event.set()
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-        await self.queue.close()
-
-    async def _run_loop(self) -> None:
-        while not self._stop_event.is_set():
-            try:
-                payload = await self.queue.get()
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.exception("worker_queue_read_failed")
-                await asyncio.sleep(0.5)
-                continue
-
-            try:
-                await self._process_payload(payload)
-            except Exception:
-                logger.exception("worker_process_failed", trace_id=payload.trace_id)
-
-    async def _process_payload(self, payload: QueueTracePayload) -> None:
+    async def process_payload(self, payload: QueueTracePayload) -> None:
         injection_result, drift_result = await asyncio.gather(
             self.injection_detector.detect(payload.prompt),
             self.drift_detector.detect(payload.prompt),
@@ -112,10 +76,10 @@ class SpawnWorker:
 
         self.injection_detector.schedule_llm_judge(
             prompt=payload.prompt,
-            callback=self._judge_callback(payload.trace_id),
+            callback=self.judge_callback(payload.trace_id),
         )
 
-    def _judge_callback(self, trace_id: str) -> Callable[[object], Awaitable[None]]:
+    def judge_callback(self, trace_id: str) -> Callable[[object], Awaitable[None]]:
         async def callback(judge_result: object) -> None:
             if hasattr(judge_result, "model_dump"):
                 payload = {"llm_judge": judge_result.model_dump()}
@@ -124,4 +88,59 @@ class SpawnWorker:
             await self.db.update_trace_metadata(trace_id, payload)
 
         return callback
+
+
+class SpawnWorker:
+    def __init__(
+        self,
+        queue: BaseQueue,
+        db: DriftGuardDatabase,
+        injection_detector: InjectionDetector,
+        drift_detector: DriftDetector,
+        trust_detector: TrustScoreDetector,
+    ) -> None:
+        self.queue = queue
+        self.processor = TraceProcessor(
+            db=db,
+            injection_detector=injection_detector,
+            drift_detector=drift_detector,
+            trust_detector=trust_detector,
+        )
+        self._task: asyncio.Task[None] | None = None
+        self._stop_event = asyncio.Event()
+
+    async def start(self) -> None:
+        if self._task and not self._task.done():
+            return
+        self._stop_event.clear()
+        self._task = asyncio.create_task(self._run_loop())
+
+    async def stop(self) -> None:
+        self._stop_event.set()
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        await self.queue.close()
+
+    async def _run_loop(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                payload = await self.queue.get()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("worker_queue_read_failed")
+                await asyncio.sleep(0.5)
+                continue
+
+            try:
+                await self._process_payload(payload)
+            except Exception:
+                logger.exception("worker_process_failed", trace_id=payload.trace_id)
+
+    async def _process_payload(self, payload: QueueTracePayload) -> None:
+        await self.processor.process_payload(payload)
 

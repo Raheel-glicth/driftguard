@@ -17,7 +17,7 @@ from driftguard.detectors.injection import InjectionDetector
 from driftguard.detectors.trust import TrustScoreDetector
 from driftguard.models import QueueTracePayload
 from driftguard.pipeline.queue import BaseQueue, create_queue
-from driftguard.pipeline.worker import SpawnWorker
+from driftguard.pipeline.worker import SpawnWorker, TraceProcessor
 from driftguard.storage.db import DriftGuardDatabase
 
 P = ParamSpec("P")
@@ -83,6 +83,12 @@ class DriftGuard:
         self.injection_detector = InjectionDetector(self.settings)
         self.drift_detector = DriftDetector(self.settings)
         self.trust_detector = TrustScoreDetector(self.settings)
+        self.processor = TraceProcessor(
+            db=self.db,
+            injection_detector=self.injection_detector,
+            drift_detector=self.drift_detector,
+            trust_detector=self.trust_detector,
+        )
         self.worker: SpawnWorker | None = None
         self._start_lock = asyncio.Lock()
         self._started = False
@@ -96,6 +102,10 @@ class DriftGuard:
             if self._started:
                 return
             await self.db.initialize()
+            if self.settings.sync_processing:
+                self._started = True
+                self._shutdown = False
+                return
             if self.queue is None:
                 self.queue = await create_queue(self.settings)
             self.worker = SpawnWorker(
@@ -186,8 +196,6 @@ class DriftGuard:
         latency_ms: float,
         metadata: dict[str, Any],
     ) -> None:
-        if self.queue is None:
-            raise RuntimeError("DriftGuard queue is not initialized")
         payload = QueueTracePayload(
             trace_id=trace_id,
             timestamp=timestamp,
@@ -197,6 +205,11 @@ class DriftGuard:
             latency_ms=latency_ms,
             metadata=metadata,
         )
+        if self.settings.sync_processing:
+            await self.processor.process_payload(payload)
+            return
+        if self.queue is None:
+            raise RuntimeError("DriftGuard queue is not initialized")
         await self.queue.publish(payload)
 
     def _stringify_response(self, response: Any) -> str:

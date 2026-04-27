@@ -23,6 +23,21 @@ Important:
 - `.env` is ignored by Git and should never be committed.
 - `.env.example` is safe to commit because it contains placeholders only.
 
+## Vercel Deployment
+
+This project can be deployed to Vercel as a FastAPI app.
+
+- The root [server.py](./server.py) exports the `app` object for Vercel's Python runtime.
+- On Vercel, DriftGuard automatically writes SQLite data to `/tmp/driftguard.db`.
+- On Vercel, DriftGuard automatically switches to synchronous trace processing so reports are not lost when a serverless request finishes.
+- The optional sentence-transformer stack is not required for deployment. If it is unavailable, DriftGuard falls back to its built-in hash embedding encoder.
+
+Set these environment variables in the Vercel dashboard:
+
+- `OPENAI_API_KEY`
+- `DRIFTGUARD_CHAT_MODEL`
+- `DRIFTGUARD_LLM_JUDGE_API_KEY` only if you want the optional async judge
+
 ## Quickstart
 
 ```python
