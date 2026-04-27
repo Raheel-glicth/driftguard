@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+
+# Databases
+*.db
+
+# Logs
+*.log
+.preview/
+
+# Temp/test folders
+.tmp-tests/
+pytest-cache-files-*/
+
+# OS
+.DS_Store

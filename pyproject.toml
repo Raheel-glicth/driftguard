@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling~=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "driftguard"
+version = "0.1.0"
+description = "Production-minded LLM monitoring and runtime safety controls for prompt injection and semantic drift."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "OpenAI Codex" }
+]
+dependencies = [
+  "aiosqlite~=0.20.0",
+  "anthropic~=0.53.0",
+  "fastapi~=0.115.0",
+  "fakeredis~=2.31.0",
+  "httpx~=0.28.0",
+  "numpy~=1.26.0",
+  "openai~=1.76.0",
+  "pydantic~=2.11.0",
+  "pydantic-settings~=2.8.0",
+  "redis~=5.2.0",
+  "scikit-learn~=1.6.0",
+  "sentence-transformers~=3.4.0",
+  "structlog~=25.2.0",
+  "uvicorn~=0.34.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest~=8.3.0",
+  "pytest-asyncio~=0.26.0",
+]
+
+[project.scripts]
+driftguard-server = "driftguard.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["driftguard"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-p no:cacheprovider"
+testpaths = ["tests"]

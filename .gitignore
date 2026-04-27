@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Databases
+*.db
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+.preview/
+
+# Temp/test folders
+.tmp-tests/
+pytest-cache-files-*/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# OS
+.DS_Store
