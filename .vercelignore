@@ -1,0 +1,9 @@
+.preview
+.tmp-tests
+tests
+examples
+pytest-cache-files-74a00ub0
+pytest-cache-files-celhn3vp
+pytest-cache-files-whllqvjm
+pytest-cache-files-wwup5pyy
+*.db
